@@ -5,6 +5,7 @@ import { List, allT, first, isNonEmptyList, rest } from '../shared/list';
 import { isBoolean, isNumber, isString } from "../shared/type-predicates";
 import { Result, makeOk, makeFailure } from "../shared/result";
 import { format } from "../shared/format";
+import { get } from "http";
 
 export const applyPrimitive = (proc: PrimOp, args: Value[]): Result<Value> =>
     proc.op === "+" ? (allT(isNumber, args) ? makeOk(reduce((x, y) => x + y, 0, args)) : 
@@ -34,7 +35,7 @@ export const applyPrimitive = (proc: PrimOp, args: Value[]): Result<Value> =>
     proc.op === "string?" ? makeOk(isString(args[0])) :
     proc.op === "dict" ? makeOk(dictPrim(args[0])) :
     proc.op === "get" ? getPrim(args[0], args[1]) :
-    proc.op === "dict?" ? makeOk(isDict(args[0])) :
+    proc.op === "dict?" ? makeOk(isDict(args[0])):
     makeFailure(`Bad primitive op: ${format(proc.op)}`);
 
 const minusPrim = (args: Value[]): Result<number> => {
@@ -100,14 +101,22 @@ export const dictPrim = (lit : Value): Value =>
     lit
 
 export const getPrim = (dict : Value, key : Value) : Result<Value> =>
-    isNonEmptyList<Value>(dict) ?
-        (isPairPrim(first(dict)) && isSymbolSExp(first(dict)) && (first(dict)) === key) ?
-            makeOk(first(dict)) :
-        getPrim(rest(dict), key) :
-        makeFailure(`Key not found: ${format(key)}`);
+    !isSymbolSExp(key) ?
+        makeFailure(`Key is not a symbol: ${format(key)}`) :
+    isDict(dict) ?
+        (isCompoundSExp(dict) && isEmptySExp(dict.val1) ?
+            makeFailure(`Key not found: ${format(key)}`) :
+            (isCompoundSExp(dict) && isCompoundSExp(dict.val1) && isSymbolSExp(dict.val1.val1) && isSymbolSExp(key) && dict.val1.val1.val === key.val) ?
+            makeOk(dict.val1.val2):
+            (isCompoundSExp(dict) && isCompoundSExp(dict.val2) ?
+                getPrim(dict.val2, key) :
+                makeFailure(` not Keyfound: ${format(key)}`))):
+        makeFailure(`Not a dict: ${format(dict)}`)
 
 export const isDict = (v: Value): boolean =>
-    isCompoundSExp(v) && isPairPrim(first(v)) && isDict(rest(v))
+    isCompoundSExp(v) ? 
+        isPairPrim(v.val1) && isDict(v.val2) :
+        isEmptySExp(v);
     
 const isPairPrim = (v: Value): boolean =>
     isCompoundSExp(v);
