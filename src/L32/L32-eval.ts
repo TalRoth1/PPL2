@@ -1,10 +1,10 @@
 // L32-eval.ts
 import { map } from "ramda";
-import { isCExp, isLetExp } from "./L32-ast";
+import { isCExp, isDictEntryExp, isLetExp, makeDict, makeDictEntry } from "./L32-ast";
 import { BoolExp, CExp, Exp, IfExp, LitExp, NumExp,
          PrimOp, ProcExp, Program, StrExp, VarDecl } from "./L32-ast";
 import { isAppExp, isBoolExp, isDefineExp, isIfExp, isLitExp, isNumExp,
-             isPrimOp, isProcExp, isStrExp, isVarRef } from "./L32-ast";
+             isPrimOp, isProcExp, isStrExp, isDictValueExp, isVarRef } from "./L32-ast";
 import { makeBoolExp, makeLitExp, makeNumExp, makeProcExp, makeStrExp } from "./L32-ast";
 import { parseL32Exp } from "./L32-ast";
 import { applyEnv, makeEmptyEnv, makeEnv, Env } from "./L32-env";
@@ -17,6 +17,7 @@ import { applyPrimitive } from "./evalPrimitive";
 import { parse as p } from "../shared/parser";
 import { Sexp } from "s-expression";
 import { format } from "../shared/format";
+import { isDict } from "../L31/evalPrimitive";
 
 // ========================================================
 // Eval functions
@@ -29,6 +30,8 @@ const L32applicativeEval = (exp: CExp, env: Env): Result<Value> =>
     isVarRef(exp) ? applyEnv(env, exp.var) :
     isLitExp(exp) ? makeOk(exp.val) :
     isIfExp(exp) ? evalIf(exp, env) :
+    isDictEntryExp(exp) ? makeOk(exp.key) :
+    isDictValueExp(exp) ? evalDict(exp, env) :
     isProcExp(exp) ? evalProc(exp, env) :
     isAppExp(exp) ? bind(L32applicativeEval(exp.rator, env), (rator: Value) =>
                         bind(mapResult(param => L32applicativeEval(param, env), exp.rands), (rands: Value[]) =>
@@ -43,6 +46,9 @@ const evalIf = (exp: IfExp, env: Env): Result<Value> =>
     bind(L32applicativeEval(exp.test, env), (test: Value) => 
         isTrueValue(test) ? L32applicativeEval(exp.then, env) : 
         L32applicativeEval(exp.alt, env));
+
+const evalDict = (exp: CExp, env: Env): Result<Value> =>
+    makeOk(true);
 
 const evalProc = (exp: ProcExp, env: Env): Result<Closure> =>
     makeOk(makeClosure(exp.args, exp.body));
