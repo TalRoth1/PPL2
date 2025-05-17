@@ -1,9 +1,10 @@
 // ========================================================
 // Value type definition for L3
 
-import { isPrimOp, CExp, PrimOp, VarDecl } from './L32-ast';
+import { isPrimOp, CExp, PrimOp, VarDecl, DictValue, DictEntry, isDictEntryExp, isDictValueExp } from './L32-ast';
 import { isNumber, isArray, isString } from '../shared/type-predicates';
-import { append } from 'ramda';
+import { append, reduce } from 'ramda';
+import { isDictEntry } from '../shared/parser';
 
 export type Value = SExpValue;
 
@@ -36,7 +37,7 @@ export type SymbolSExp = {
     val: string;
 }
 
-export type SExpValue = number | boolean | string | PrimOp | Closure | SymbolSExp | EmptySExp | CompoundSExp;
+export type SExpValue = number | boolean | string | PrimOp | Closure | SymbolSExp | EmptySExp | CompoundSExp | DictValue | DictEntry;
 export const isSExp = (x: any): x is SExpValue =>
     typeof(x) === 'string' || typeof(x) === 'boolean' || typeof(x) === 'number' ||
     isSymbolSExp(x) || isCompoundSExp(x) || isEmptySExp(x) || isPrimOp(x) || isClosure(x);
@@ -80,4 +81,6 @@ export const valueToString = (val: Value): string =>
     isSymbolSExp(val) ? val.val :
     isEmptySExp(val) ? "'()" :
     isCompoundSExp(val) ? compoundSExpToString(val) :
+    isDictEntryExp(val) ? `(${val.key} . ${val.val})` :
+    isDictValueExp(val) ?  `(${reduce((acc: string, entry: DictEntry) => acc + " " + valueToString(entry), "", val.val)}` :
     val;

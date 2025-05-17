@@ -1,6 +1,6 @@
 // L32-eval.ts
-import { map } from "ramda";
-import { isCExp, isDictEntryExp, isLetExp, makeDict, makeDictEntry } from "./L32-ast";
+import { is, map } from "ramda";
+import { DictEntry, DictValue, isCExp, isDictEntryExp, isLetExp, makeDict, makeDictEntry } from "./L32-ast";
 import { BoolExp, CExp, Exp, IfExp, LitExp, NumExp,
          PrimOp, ProcExp, Program, StrExp, VarDecl } from "./L32-ast";
 import { isAppExp, isBoolExp, isDefineExp, isIfExp, isLitExp, isNumExp,
@@ -8,10 +8,10 @@ import { isAppExp, isBoolExp, isDefineExp, isIfExp, isLitExp, isNumExp,
 import { makeBoolExp, makeLitExp, makeNumExp, makeProcExp, makeStrExp } from "./L32-ast";
 import { parseL32Exp } from "./L32-ast";
 import { applyEnv, makeEmptyEnv, makeEnv, Env } from "./L32-env";
-import { isClosure, makeClosure, Closure, Value } from "./L32-value";
+import { isClosure, makeClosure, Closure, Value, isSymbolSExp, SymbolSExp} from "./L32-value";
 import { first, rest, isEmpty, List, isNonEmptyList } from '../shared/list';
 import { isBoolean, isNumber, isString } from "../shared/type-predicates";
-import { Result, makeOk, makeFailure, bind, mapResult, mapv } from "../shared/result";
+import { Result, makeOk, makeFailure, bind, mapResult} from "../shared/result";
 import { renameExps, substitute } from "./substitute";
 import { applyPrimitive } from "./evalPrimitive";
 import { parse as p } from "../shared/parser";
@@ -31,7 +31,7 @@ const L32applicativeEval = (exp: CExp, env: Env): Result<Value> =>
     isLitExp(exp) ? makeOk(exp.val) :
     isIfExp(exp) ? evalIf(exp, env) :
     isDictEntryExp(exp) ? makeOk(exp.key) :
-    isDictValueExp(exp) ? evalDict(exp, env) :
+    isDictValueExp(exp) ? evalDict(exp) :
     isProcExp(exp) ? evalProc(exp, env) :
     isAppExp(exp) ? bind(L32applicativeEval(exp.rator, env), (rator: Value) =>
                         bind(mapResult(param => L32applicativeEval(param, env), exp.rands), (rands: Value[]) =>
@@ -47,8 +47,15 @@ const evalIf = (exp: IfExp, env: Env): Result<Value> =>
         isTrueValue(test) ? L32applicativeEval(exp.then, env) : 
         L32applicativeEval(exp.alt, env));
 
-const evalDict = (exp: CExp, env: Env): Result<Value> =>
-    makeOk(true);
+const evalDict = (exp: DictValue): Result<Value> => 
+    bind(
+        mapResult((pair : DictEntry) =>
+            bind(makeOk(pair.val), (evaluatedVal: Value) =>
+                makeOk(makeDictEntry(pair.key, evaluatedVal))
+            ), exp.val),
+        (evaluatedPairs:List<DictEntry>) =>
+            makeOk(makeDict(evaluatedPairs))
+    );
 
 const evalProc = (exp: ProcExp, env: Env): Result<Closure> =>
     makeOk(makeClosure(exp.args, exp.body));
@@ -56,8 +63,13 @@ const evalProc = (exp: ProcExp, env: Env): Result<Closure> =>
 const L32applyProcedure = (proc: Value, args: Value[], env: Env): Result<Value> =>
     isPrimOp(proc) ? applyPrimitive(proc, args) :
     isClosure(proc) ? applyClosure(proc, args, env) :
+    isDictValueExp(proc) && args.length === 1 && isSymbolSExp(args[0]) ? applyDict(proc, args[0]) :
     makeFailure(`Bad procedure ${format(proc)}`);
 
+const applyDict = (proc: DictValue, key: SymbolSExp): Result<Value> =>{
+    const result = proc.val.filter((pair: DictEntry) => pair.key.val === key.val)
+    return result.length > 0 ? makeOk(result[0].val) : makeFailure("Error: Key not found");
+}
 // Applications are computed by substituting computed
 // values into the body of the closure.
 // To make the types fit - computed values of params must be

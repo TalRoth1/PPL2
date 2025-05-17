@@ -1,11 +1,11 @@
 // ===========================================================
 // AST type models
-import { map, zipWith } from "ramda";
-import { makeEmptySExp, makeSymbolSExp, SExpValue, makeCompoundSExp, valueToString, SymbolSExp } from './L32-value'
+import { filter, map, zipWith } from "ramda";
+import { makeEmptySExp, makeSymbolSExp, SExpValue, makeCompoundSExp, valueToString, SymbolSExp, isSExp } from './L32-value'
 import { first, second, rest, allT, isEmpty, isNonEmptyList, List, NonEmptyList } from "../shared/list";
-import { isArray, isString, isNumericString, isIdentifier } from "../shared/type-predicates";
-import { Result, makeOk, makeFailure, bind, mapResult, mapv } from "../shared/result";
-import { parse as p, isSexpString, isToken, isCompoundSexp } from "../shared/parser";
+import { isArray, isString, isNumericString, isIdentifier, isBoolean, isNumber } from "../shared/type-predicates";
+import { Result, makeOk, makeFailure, bind, mapResult, mapv, isOk } from "../shared/result";
+import { parse as p, isSexpString, isToken, isCompoundSexp, isSexp, isDictEntry } from "../shared/parser";
 import { Sexp, Token } from "s-expression";
 
 /*
@@ -66,7 +66,7 @@ export type Binding = {tag: "Binding"; var: VarDecl; val: CExp; }
 export type LetExp = {tag: "LetExp"; bindings: Binding[]; body: CExp[]; }
 // L3
 export type LitExp = {tag: "LitExp"; val: SExpValue; }
-export type DictEntry = {tag: "DictEntry"; key: string ; val: number | string | boolean; }
+export type DictEntry = {tag: "DictEntry"; key: SymbolSExp ; val: SExpValue; }
 export type DictValue = {tag: "DictValue"; val: DictEntry[]; }
 
 // Type value constructors for disjoint types
@@ -93,7 +93,7 @@ export const makeLetExp = (bindings: Binding[], body: CExp[]): LetExp =>
 // L3
 export const makeLitExp = (val: SExpValue): LitExp =>
     ({tag: "LitExp", val: val});
-export const makeDictEntry = (key: string, val: string | number | boolean): DictEntry =>
+export const makeDictEntry = (key: SymbolSExp, val: SExpValue): DictEntry =>
     ({tag: "DictEntry", key: key, val: val});
 export const makeDict = (defs : DictEntry[]): DictValue =>
     ({tag: "DictValue", val: defs});
@@ -264,10 +264,43 @@ export const parseLitExp = (param: Sexp): Result<LitExp> =>
          makeLitExp(sexp));
 
 export const parseDictExp = (params: Sexp[]): Result<DictValue> =>{
-    const defs = map((p: Sexp) => makeDictEntry("1", 1), params);
-    const dict = makeDict(defs);
-    return makeOk(dict);
+    const entries = map((entry: Sexp) => isNonEmptyList<Sexp>(entry) ? parseDictEntry(entry) : makeFailure(`Bad dict entry: ${format(entry)}`), params)
+    const values = map((entry: Result<unknown>) => isOk(entry) ? entry.value : entry.message, entries)
+    const goodEntries = values.filter(isDictEntry)
+    return values.length === goodEntries.length ? makeOk(makeDict(goodEntries)) : makeFailure(`Bad dict format: ${format(values)}`)
 }
+
+export const parseDictEntry = (params: Sexp[]): Result<DictEntry> => {
+    const expsResult = mapResult(parseSExp, params);
+    if (isOk(expsResult)) {
+        const exps = expsResult.value;
+        if (isNonEmptyList<Sexp>(exps) && isDictEntry(exps)) {
+            if (isSymbolSExp(exps[0]) && isVarRef(exps[1])) {
+                return makeOk(makeDictEntry(makeSymbolSExp(exps[0].val), exps[1].var));
+            } else if (isSymbolSExp(exps[0]) && (isString(exps[1]) || isBoolean(exps[1]) || isNumber(exps[1]))) {
+                return makeOk(makeDictEntry(makeSymbolSExp(exps[0].val), exps[1]));
+            } else {
+                return makeFailure(`Bad dict entry: ${format(exps)}`);
+            }
+        } else {
+            return makeFailure(`Bad dict entry: ${format(exps)}`);
+        }
+    } else {
+        return makeFailure(`Bad dict entry: ${format(params)}`);
+    }
+    // if(isNonEmptyList<Sexp>(params) && params.length === 2){
+    //     const exps = mapResult(parseSExp, params);
+    //     return isNonEmptyList<Sexp>(exps) && isDictEntry(exps) ?
+    //         isSymbolSExp(exps[0]) && isVarRef(exps[1]) ? makeOk(makeDictEntry(makeSymbolSExp(exps[0].val), exps[1].var)) :
+    //         isSymbolSExp(exps[0]) && (isStrExp(exps[1]) || isBoolExp(exps[1]) || isNumExp(exps[1])) ? makeOk(makeDictEntry(makeSymbolSExp(exps[0].val), exps[1].val)) :
+    //         makeFailure(`Bad dict entry: ${format(exps)}`):
+    //     makeFailure(`Bad dict entry: ${format(exps)}`)
+    // }
+    // else{
+    //     return makeFailure(`Bad dict entry: ${format(params)}`);
+    // }
+}
+        
 
 export const isDottedPair = (sexps: Sexp[]): boolean =>
     sexps.length === 3 && 
@@ -302,7 +335,6 @@ export const parseSExp = (sexp: Sexp): Result<SExpValue> =>
 
 import { isSymbolSExp, isEmptySExp, isCompoundSExp } from './L32-value';
 import { format } from "../shared/format";
-import { isDict } from "../L31/evalPrimitive";
 
 // Add a quote for symbols, empty and compound sexp - strings and numbers are not quoted.
 const unparseLitExp = (le: LitExp): string =>

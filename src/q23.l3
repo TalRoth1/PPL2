@@ -1,0 +1,62 @@
+(define dict?
+  (lambda (obj)
+    (if (eq? obj '())
+      #t
+      (if (pair? obj)
+        (if (and (pair? (car obj)) (dict? (cdr obj)))
+          (symbol? (car (car obj)))
+          #f
+        )
+        #f
+      )
+    )
+  )
+)
+
+(define dict
+  (lambda (pairs)
+    (if (dict? pairs)
+      pairs
+      (make-error "Invalid dictionary format")
+    )
+  )
+)
+
+(define get
+  (lambda (d key)
+    (if (dict? d)
+      (find key d)
+      (make-error "Not a dictionary")
+    )
+  )
+)
+
+(define make-error
+  (lambda (msg)
+    (list 'error msg)
+  )
+)
+
+(define is-error?
+  (lambda (obj)
+    (and (pair? obj) (eq? (car obj) 'error))
+  )
+)
+
+(define bind
+  (lambda (value func)
+    (func value)
+  )
+)
+
+(define find
+  (lambda (key lst)
+    (if (eq? lst '())
+      (make-error 'key-not-found)
+      (if (eq? (car (car lst)) key)
+        (cdr (car lst))
+        (find key (cdr lst))
+      )
+    )
+  )
+)
