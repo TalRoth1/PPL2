@@ -3,7 +3,8 @@ import { all, map } from "ramda";
 import {  evalL32program, evalParse } from '../src/L32/L32-eval';
 import { Value } from "../src/L32/L32-value";
 import { Result, bind, makeOk } from "../src/shared/result";
-import { Binding, CExp, Exp, isAppExp, isAtomicExp, isDefineExp, isDictExp, isIfExp, isLetExp, isLitExp, isProcExp, isProgram, parseL32, parseL32CExp, parseL32Exp, Program } from "../src/L32/L32-ast";
+import {Binding, CExp, Exp, isAppExp, isAtomicExp, isDefineExp, isDictExp, isIfExp, isLetExp, isLitExp, isProcExp, isProgram, parseL32, parseL32CExp, parseL32Exp, Program
+} from "../src/L32/L32-ast";
 import { L32toL3 } from "../src/q24";
 import { makeSymbolSExp } from '../src/L3/L3-value';
 
