@@ -1,5 +1,3 @@
-import { pair } from 'ramda';
-import { makeProgram} from './L3/L3-ast';
 import {makeDottedPair, Program, makeAppExp, makeStrExp, makeLitExp, Exp, CExp, makeDefineExp} from './L32/L32-ast';
 import { Sexp } from 's-expression';
 /*
